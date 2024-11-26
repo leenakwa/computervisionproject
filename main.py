@@ -38,16 +38,16 @@ class Storage:
         return cls._instance
 
     def _initialize_resources(self):
-        self.death = pygame.mixer.Sound('sound_sfx_die.wav')
-        self.swoosh = pygame.mixer.Sound('sound_sfx_swooshing.wav')
-        self.hit = pygame.mixer.Sound('sound_sfx_hit.wav')
-        self.font = pygame.font.Font('04B_19.TTF', FONT_SIZE)
-        self.background = pygame.transform.scale2x(pygame.image.load('background-day.png').convert())
-        self.floor = pygame.transform.scale2x(pygame.image.load('base.png').convert())
-        self.bird_down_flap = pygame.transform.scale2x(pygame.image.load('bluebird-downflap.png').convert_alpha())
-        self.bird_mid_flap = pygame.transform.scale2x(pygame.image.load('bluebird-midflap.png').convert_alpha())
-        self.bird_up_flap = pygame.transform.scale2x(pygame.image.load('bluebird-upflap.png').convert_alpha())
-        self.pipe = pygame.transform.scale2x(pygame.image.load('pipe-green.png').convert_alpha())
+        self.death = pygame.mixer.Sound('assets/sounds/sound_sfx_die.wav')
+        self.swoosh = pygame.mixer.Sound('assets/sounds/sound_sfx_swooshing.wav')
+        self.hit = pygame.mixer.Sound('assets/sounds/sound_sfx_hit.wav')
+        self.font = pygame.font.Font('assets/fonts/04B_19.TTF', FONT_SIZE)
+        self.background = pygame.transform.scale2x(pygame.image.load('assets/images/background-day.png').convert())
+        self.floor = pygame.transform.scale2x(pygame.image.load('assets/images/base.png').convert())
+        self.bird_down_flap = pygame.transform.scale2x(pygame.image.load('assets/images/bluebird-downflap.png').convert_alpha())
+        self.bird_mid_flap = pygame.transform.scale2x(pygame.image.load('assets/images/bluebird-midflap.png').convert_alpha())
+        self.bird_up_flap = pygame.transform.scale2x(pygame.image.load('assets/images/bluebird-upflap.png').convert_alpha())
+        self.pipe = pygame.transform.scale2x(pygame.image.load('assets/images/pipe-green.png').convert_alpha())
 
 
 class Pipe:
@@ -174,7 +174,7 @@ BIRDFLAP = pygame.USEREVENT + 1
 pygame.time.set_timer(BIRDFLAP, 200)
 SPAWNPIPE = pygame.USEREVENT
 pygame.time.set_timer(SPAWNPIPE, 1600)
-FLAP_STRENGTH = -12
+FLAP_STRENGTH = -10
 
 # Создание объектов классов
 event_facade = EventFacade()
