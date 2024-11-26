@@ -162,7 +162,7 @@ pygame.init()
 screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
 storage = Storage()
 clock = pygame.time.Clock()
-gravity = 0.5
+gravity = 0.6
 bird_movement = 0
 game_active = True
 score = 0
@@ -174,7 +174,7 @@ BIRDFLAP = pygame.USEREVENT + 1
 pygame.time.set_timer(BIRDFLAP, 200)
 SPAWNPIPE = pygame.USEREVENT
 pygame.time.set_timer(SPAWNPIPE, 1600)
-FLAP_STRENGTH = -10
+FLAP_STRENGTH = -14
 
 # Создание объектов классов
 event_facade = EventFacade()
@@ -194,7 +194,7 @@ CONSECUTIVE_FRAMES = 2
 blink_count = 0
 frame_counter = 0
 
-cap = cv2.VideoCapture(1)
+cap = cv2.VideoCapture(0)
 while cap.isOpened():
     success, frame = cap.read()
     if not success:
