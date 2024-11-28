@@ -189,7 +189,7 @@ def cv2_to_pygame(cv2_image):
 def enhance_eye_image(eye_image):
     if eye_image.size == 0:
         return None
-    denoised_eye = cv2.bilateralFilter(eye_image, d=9, sigmaColor=75, sigmaSpace=75)
+    denoised_eye = cv2.bilateralFilter(eye_image, d=7, sigmaColor=60, sigmaSpace=75)
     kernel = np.array([[0, -0.5, 0],
                        [-0.5, 3, -0.5],
                        [0, -0.5, 0]])
