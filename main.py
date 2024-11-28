@@ -180,10 +180,21 @@ def get_eye_regions(frame, landmarks):
 
 
 def cv2_to_pygame(cv2_image):
-    if cv2_image.size == 0:
+    if cv2_image is None or cv2_image.size == 0:
         return None
     rgb_image = cv2.cvtColor(cv2_image, cv2.COLOR_BGR2RGB)
     return pygame.surfarray.make_surface(np.flip(rgb_image, axis=1))
+
+
+def enhance_eye_image(eye_image):
+    if eye_image.size == 0:
+        return None
+    denoised_eye = cv2.bilateralFilter(eye_image, d=9, sigmaColor=75, sigmaSpace=75)
+    kernel = np.array([[0, -0.5, 0],
+                       [-0.5, 3, -0.5],
+                       [0, -0.5, 0]])
+    sharp_eye = cv2.filter2D(denoised_eye, -1, kernel)
+    return sharp_eye
 
 
 left_ear_filter = EARFilter()
@@ -246,8 +257,10 @@ while cap.isOpened():
             right_ear = right_ear_filter.update(right_ear)
             left_eye, right_eye = get_eye_regions(frame, landmarks)
             if left_eye is not None:
+                left_eye = enhance_eye_image(left_eye)
                 left_eye_surface = cv2_to_pygame(left_eye)
             if right_eye is not None:
+                right_eye = enhance_eye_image(right_eye)
                 right_eye_surface = cv2_to_pygame(right_eye)
             if left_ear < EAR_THRESHOLD and right_ear < EAR_THRESHOLD:
                 frame_counter += 1
