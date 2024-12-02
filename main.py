@@ -4,7 +4,8 @@ import sys
 import cv2
 import mediapipe as mp
 import numpy as np
-
+import pyganim
+from PIL import Image, ImageSequence
 
 class EventFacade:
     def __init__(self):
@@ -42,13 +43,13 @@ class Storage:
         self.swoosh = pygame.mixer.Sound('assets/sounds/sound_sfx_swooshing.wav')
         self.hit = pygame.mixer.Sound('assets/sounds/sound_sfx_hit.wav')
         self.font = pygame.font.Font('assets/fonts/04B_19.TTF', FONT_SIZE)
+        self.font20 = pygame.font.Font('assets/fonts/04B_19.TTF', SMALL_FONT_SIZE)
         self.background = pygame.transform.scale2x(pygame.image.load('assets/images/background-day.png').convert())
         self.floor = pygame.transform.scale2x(pygame.image.load('assets/images/base.png').convert())
         self.bird_down_flap = pygame.transform.scale2x(pygame.image.load('assets/images/bluebird-downflap.png').convert_alpha())
         self.bird_mid_flap = pygame.transform.scale2x(pygame.image.load('assets/images/bluebird-midflap.png').convert_alpha())
         self.bird_up_flap = pygame.transform.scale2x(pygame.image.load('assets/images/bluebird-upflap.png').convert_alpha())
         self.pipe = pygame.transform.scale2x(pygame.image.load('assets/images/pipe-green.png').convert_alpha())
-
 
 class Pipe:
     def __init__(self):
@@ -85,6 +86,8 @@ class Pipe:
             flipped_pipe = pygame.transform.flip(self.pipe_img, False, True)
             self.screen.blit(flipped_pipe, pipe['top'])
 
+    def restart(self):
+        self.pipes = []
 
 
 class Bird:
@@ -95,6 +98,7 @@ class Bird:
         self.rect = self.image.get_rect(center=(100, 512))
         self.movement = 0
         self.screen = screen
+        self.visible = True
 
     def rotate(self):
         rotated_bird = pygame.transform.rotozoom(self.image, -self.movement * 3, 1)
@@ -118,7 +122,7 @@ class Bird:
         self.movement = 0
         self.index = 0
         self.image = self.frames[self.index]
-
+        self.visible = True
 
 class EARFilter:
     def __init__(self, buffer_size=5):
@@ -205,13 +209,14 @@ SCREEN_WIDTH, SCREEN_HEIGHT = 576, 1024
 PIPE_SPACING = 350
 PIPE_SPEED = 15
 FONT_SIZE = 40
+SMALL_FONT_SIZE = 20
 pygame.init()
 screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
 storage = Storage()
 clock = pygame.time.Clock()
 gravity = 1
 bird_movement = 0
-game_active = True
+
 score = 0
 floor_x_pos = 0
 high_score = 0
@@ -238,46 +243,24 @@ EAR_THRESHOLD = 0.4
 CONSECUTIVE_FRAMES = 2
 blink_count = 0
 frame_counter = 0
-
+game_active = True
+START = 'start'
+GAME = 'game'
+END = 'end'
+game_state = START
 cap = cv2.VideoCapture(0)
 while cap.isOpened():
     success, frame = cap.read()
     if not success:
         break
 
-    rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-    results = face_mesh.process(rgb_frame)
-    left_eye_surface, right_eye_surface = None, None
-    if results.multi_face_landmarks:
-        for face_landmarks in results.multi_face_landmarks:
-            landmarks = [(lm.x, lm.y, lm.z) for lm in face_landmarks.landmark]
-            left_ear = calculate_ear(LEFT_EYE, landmarks)
-            right_ear = calculate_ear(RIGHT_EYE, landmarks)
-            left_ear = left_ear_filter.update(left_ear)
-            right_ear = right_ear_filter.update(right_ear)
-            left_eye, right_eye = get_eye_regions(frame, landmarks)
-            if left_eye is not None:
-                left_eye = enhance_eye_image(left_eye)
-                left_eye_surface = cv2_to_pygame(left_eye)
-            if right_eye is not None:
-                right_eye = enhance_eye_image(right_eye)
-                right_eye_surface = cv2_to_pygame(right_eye)
-            if left_ear < EAR_THRESHOLD and right_ear < EAR_THRESHOLD:
-                frame_counter += 1
-            else:
-                if frame_counter >= CONSECUTIVE_FRAMES:
-                    blink_count += 1
-                    bird.movement = FLAP_STRENGTH
-                    storage.swoosh.play()
-                frame_counter = 0
-
     event_facade.handle_events()
     if event_facade.is_quit():
         pygame.quit()
         sys.exit()
     if event_facade.is_key_pressed(pygame.K_SPACE):
-        if game_active is False:
-            game_active = True
+        if game_state == END or game_state == START:
+            game_state = GAME
             pipe_manager.pipes = []
             bird.restart()
             score = 0
@@ -287,7 +270,45 @@ while cap.isOpened():
         bird.animate()
 
     screen.blit(background_surface, (0, 0))
-    if game_active:
+    if game_state == START:
+        surface = storage.font20.render('Bird jumps when you blink. Press SPACE to start', True, (255, 255, 255))
+        rect = surface.get_rect(center=(SCREEN_WIDTH // 2, 200))
+        screen.blit(surface, rect)
+    if game_state == GAME:
+        rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        results = face_mesh.process(rgb_frame)
+        left_eye_surface, right_eye_surface = None, None
+        if results.multi_face_landmarks:
+            for face_landmarks in results.multi_face_landmarks:
+                landmarks = [(lm.x, lm.y, lm.z) for lm in face_landmarks.landmark]
+                left_ear = calculate_ear(LEFT_EYE, landmarks)
+                right_ear = calculate_ear(RIGHT_EYE, landmarks)
+                left_ear = left_ear_filter.update(left_ear)
+                right_ear = right_ear_filter.update(right_ear)
+                left_eye, right_eye = get_eye_regions(frame, landmarks)
+                if left_eye is not None:
+                    left_eye = enhance_eye_image(left_eye)
+                    left_eye_surface = cv2_to_pygame(left_eye)
+                if right_eye is not None:
+                    right_eye = enhance_eye_image(right_eye)
+                    right_eye_surface = cv2_to_pygame(right_eye)
+                if left_ear < EAR_THRESHOLD and right_ear < EAR_THRESHOLD:
+                    frame_counter += 1
+                else:
+                    if frame_counter >= CONSECUTIVE_FRAMES:
+                        blink_count += 1
+                        bird.movement = FLAP_STRENGTH
+                        storage.swoosh.play()
+                    frame_counter = 0
+        if left_eye_surface:
+            left_eye = pygame.transform.scale2x(
+                pygame.transform.flip(pygame.transform.rotate(left_eye_surface, -90), True, False))
+            screen.blit(left_eye, (SCREEN_WIDTH - 150, 50))
+
+        if right_eye_surface:
+            right_eye = pygame.transform.scale2x(
+                pygame.transform.flip(pygame.transform.rotate(right_eye_surface, -90), True, False))
+            screen.blit(right_eye, (50, 50))
         bird.update_movement(gravity)
         bird.draw()
         pipe_manager.move_pipes()
@@ -298,18 +319,18 @@ while cap.isOpened():
                 score += 1
         game_active = pipe_manager.check_collision(bird.rect)
         score_display(game_active)
-    else:
+        if not game_active:
+            game_state = END
+    elif game_state == END:
         high_score = update_score(score, high_score)
-        score_display(game_active)
+        print(high_score)
+        score_display(False)
         storage.death.play()
-
-    if left_eye_surface:
-        left_eye = pygame.transform.scale2x(pygame.transform.flip(pygame.transform.rotate(left_eye_surface, -90), True, False))
-        screen.blit(left_eye, (SCREEN_WIDTH - 150, 50))
-
-    if right_eye_surface:
-        right_eye = pygame.transform.scale2x(pygame.transform.flip(pygame.transform.rotate(right_eye_surface, -90),True, False))
-        screen.blit(right_eye, (50, 50))
+        bird.restart()
+        pipe_manager.restart()
+        score = 0
+        frame_counter = 0
+        game_state = START
 
     floor_x_pos -= 1
     draw_floor()
@@ -317,7 +338,8 @@ while cap.isOpened():
         floor_x_pos = 0
 
     display_blink_count(blink_count)
+    score_display(game_active)
     pygame.display.update()
-    clock.tick(100)
+    clock.tick(120)
 
 
