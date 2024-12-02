@@ -3,9 +3,6 @@ import random
 import sys
 import cv2
 import mediapipe as mp
-import numpy as np
-import pyganim
-from PIL import Image, ImageSequence
 
 class EventFacade:
     def __init__(self):
