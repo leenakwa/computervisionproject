@@ -310,8 +310,9 @@ bird_movement = 0
 floor_x_pos = 0
 score = 0
 best_score = 0
-blink_count = 0
 frame_counter = 0
+blink_count = 0
+
 
 BIRDFLAP = pygame.USEREVENT + 1
 SPAWNPIPE = pygame.USEREVENT
