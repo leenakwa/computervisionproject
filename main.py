@@ -327,8 +327,8 @@ face_mesh = mp_face_mesh.FaceMesh(refine_landmarks=True)
 mp_drawing = mp.solutions.drawing_utils
 
 # Initialize game state variables
-game_state = START
 game_active = True
+game_state = START
 bird_movement = 0
 floor_x_pos = 0
 score = 0
