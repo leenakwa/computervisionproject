@@ -304,8 +304,8 @@ mp_drawing = mp.solutions.drawing_utils
 left_ear_filter = EARFilter(EAR_BUFFER_SIZE)
 right_ear_filter = EARFilter(EAR_BUFFER_SIZE)
 
-game_active = True
 game_state = START
+game_active = True
 bird_movement = 0
 floor_x_pos = 0
 score = 0
