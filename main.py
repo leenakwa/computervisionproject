@@ -149,6 +149,87 @@ class EARFilter:
         return np.mean(self.buffer)
 
 
+class Eye:
+    def __init__(self, left_eye_indices, right_eye_indices, ear_threshold, ear_buffer_size):
+        self.left_eye_indices = left_eye_indices
+        self.right_eye_indices = right_eye_indices
+        self.ear_threshold = ear_threshold
+        self.left_ear_filter = EARFilter(ear_buffer_size)
+        self.right_ear_filter = EARFilter(ear_buffer_size)
+
+    @staticmethod
+    def calculate_ear(eye_points, landmarks):
+        """Calculate Eye Aspect Ratio (EAR)."""
+        d1 = np.linalg.norm(np.array(landmarks[eye_points[1]]) - np.array(landmarks[eye_points[5]]))
+        d2 = np.linalg.norm(np.array(landmarks[eye_points[2]]) - np.array(landmarks[eye_points[4]]))
+        d3 = np.linalg.norm(np.array(landmarks[eye_points[0]]) - np.array(landmarks[eye_points[3]]))
+        return (d1 + d2) / (2.0 * d3)
+
+    def update_ear(self, landmarks):
+        """Update EAR values for both eyes and check if blinking."""
+        left_ear = self.left_ear_filter.update(self.calculate_ear(self.left_eye_indices, landmarks))
+        right_ear = self.right_ear_filter.update(self.calculate_ear(self.right_eye_indices, landmarks))
+        return left_ear < self.ear_threshold and right_ear < self.ear_threshold
+
+    @staticmethod
+    def get_eye_regions(frame, landmarks, eye_indices):
+        """Extract eye region from frame based on landmarks."""
+        coords = np.array([(int(landmarks[idx][0] * frame.shape[1]),
+                            int(landmarks[idx][1] * frame.shape[0])) for idx in eye_indices])
+        x, y, w, h = cv2.boundingRect(coords)
+        return frame[y:y + h, x:x + w]
+
+    @staticmethod
+    def enhance_eye_image(eye_image):
+        """Enhance eye region image for better visualization."""
+        if eye_image.size == 0:
+            return None
+        denoised_eye = cv2.bilateralFilter(eye_image, d=BILATERAL_FILTER_D,
+                                           sigmaColor=BILATERAL_FILTER_SIGMA_COLOR,
+                                           sigmaSpace=BILATERAL_FILTER_SIGMA_SPACE)
+        sharp_eye = cv2.filter2D(denoised_eye, -1, FILTER_KERNEL)
+        return sharp_eye
+
+    @staticmethod
+    def cv2_to_pygame(cv2_image):
+        """Convert OpenCV image to Pygame surface."""
+        if cv2_image is None or cv2_image.size == 0:
+            return None
+        rgb_image = cv2.cvtColor(cv2_image, cv2.COLOR_BGR2RGB)
+        return pygame.surfarray.make_surface(np.flip(rgb_image, axis=1))
+
+    def process_eyes(self, frame, landmarks):
+        """Process eye regions and return EAR state and surfaces."""
+        left_eye = self.get_eye_regions(frame, landmarks, self.left_eye_indices)
+        right_eye = self.get_eye_regions(frame, landmarks, self.right_eye_indices)
+
+        if left_eye is not None:
+            left_eye = self.enhance_eye_image(left_eye)
+            left_eye_surface = self.cv2_to_pygame(left_eye)
+        else:
+            left_eye_surface = None
+
+        if right_eye is not None:
+            right_eye = self.enhance_eye_image(right_eye)
+            right_eye_surface = self.cv2_to_pygame(right_eye)
+        else:
+            right_eye_surface = None
+
+        return left_eye_surface, right_eye_surface
+
+    def draw_eyes(self, screen, left_eye_surface, right_eye_surface, eye_coords, eye_rotation_angle):
+        """Draw eyes on the screen."""
+        if left_eye_surface:
+            left_eye = pygame.transform.scale2x(
+                pygame.transform.flip(pygame.transform.rotate(left_eye_surface, eye_rotation_angle), True, False))
+            screen.blit(left_eye, eye_coords[0])
+
+        if right_eye_surface:
+            right_eye = pygame.transform.scale2x(
+                pygame.transform.flip(pygame.transform.rotate(right_eye_surface, eye_rotation_angle), True, False))
+            screen.blit(right_eye, eye_coords[1])
+
+
 def draw_floor():
     screen.blit(storage.floor, (floor_x_pos, SCREEN_HEIGHT - storage.floor.get_size()[1] // 2))
     screen.blit(storage.floor, (floor_x_pos + SCREEN_WIDTH, SCREEN_HEIGHT - storage.floor.get_size()[1] // 2))
@@ -169,72 +250,10 @@ def update_score(score, best):
     return max(score, best)
 
 
-def calculate_ear(eye_points, landmarks):
-    """Calculate Eye Aspect Ratio (EAR)"""
-    d1 = np.linalg.norm(np.array(landmarks[eye_points[1]]) - np.array(landmarks[eye_points[5]]))
-    d2 = np.linalg.norm(np.array(landmarks[eye_points[2]]) - np.array(landmarks[eye_points[4]]))
-    d3 = np.linalg.norm(np.array(landmarks[eye_points[0]]) - np.array(landmarks[eye_points[3]]))
-    return (d1 + d2) / (2.0 * d3)
-
-
 def display_blink_count(blink_count):
     blink_surface = storage.font.render(f'Blinks: {blink_count}', True, WHITE)
     blink_rect = blink_surface.get_rect(center=(SCREEN_WIDTH / 2, MARGIN))
     screen.blit(blink_surface, blink_rect)
-
-
-def get_eye_regions(frame, landmarks):
-    def extract_eye(eye_indices):
-        coords = np.array([(int(landmarks[idx][0] * frame.shape[1]),
-                            int(landmarks[idx][1] * frame.shape[0])) for idx in eye_indices])
-        x, y, w, h = cv2.boundingRect(coords)
-        return frame[y:y + h, x:x + w]
-
-    left_eye = extract_eye(LEFT_EYE)
-    right_eye = extract_eye(RIGHT_EYE)
-
-    return left_eye, right_eye
-
-
-def cv2_to_pygame(cv2_image):
-    if cv2_image is None or cv2_image.size == 0:
-        return None
-    rgb_image = cv2.cvtColor(cv2_image, cv2.COLOR_BGR2RGB)
-    return pygame.surfarray.make_surface(np.flip(rgb_image, axis=1))
-
-
-def enhance_eye_image(eye_image):
-    if eye_image.size == 0:
-        return None
-    denoised_eye = cv2.bilateralFilter(eye_image, d=BILATERAL_FILTER_D, sigmaColor=BILATERAL_FILTER_SIGMA_COLOR,
-                                       sigmaSpace=BILATERAL_FILTER_SIGMA_SPACE)
-    sharp_eye = cv2.filter2D(denoised_eye, -1, FILTER_KERNEL)
-    return sharp_eye
-
-
-def eye_calculation(landmarks):
-    left_ear = left_ear_filter.update(calculate_ear(LEFT_EYE, landmarks))
-    right_ear = right_ear_filter.update(calculate_ear(RIGHT_EYE, landmarks))
-    left_eye, right_eye = get_eye_regions(frame, landmarks)
-    if left_eye is not None:
-        left_eye = enhance_eye_image(left_eye)
-        left_eye_surface = cv2_to_pygame(left_eye)
-    if right_eye is not None:
-        right_eye = enhance_eye_image(right_eye)
-        right_eye_surface = cv2_to_pygame(right_eye)
-    return [left_ear < EAR_THRESHOLD and right_ear < EAR_THRESHOLD, left_eye_surface, right_eye_surface]
-
-
-def draw_eyes(left_eye_surface, right_eye_surface):
-    if left_eye_surface:
-        left_eye = pygame.transform.scale2x(
-            pygame.transform.flip(pygame.transform.rotate(left_eye_surface, EYE_ROTATION_ANGLE), True, False))
-        screen.blit(left_eye, EYE_COORD[0])
-
-    if right_eye_surface:
-        right_eye = pygame.transform.scale2x(
-            pygame.transform.flip(pygame.transform.rotate(right_eye_surface, EYE_ROTATION_ANGLE), True, False))
-        screen.blit(right_eye, EYE_COORD[1])
 
 
 def write_text(text, font, color, coord):
@@ -255,7 +274,7 @@ pygame.init()
 SCREEN_WIDTH, SCREEN_HEIGHT = 576, 1024
 GRAVITY = 1
 FPS = 60
-SMALL_TEXT_COORD = (SCREEN_WIDTH // 2, 200)
+SMALL_TEXT_COORD = (SCREEN_WIDTH // 2, 300)
 EYE_COORD = [(SCREEN_WIDTH - 150, 50), (50, 50)]
 BIRD_START_COORD = [100, 512]
 ROTATION_SPEED_MULTIPLIER = 3
@@ -288,7 +307,7 @@ START = 'start'
 GAME = 'game'
 END = 'end'
 
-instructions_text = ['Bird jumps when you blink.',  'Press SPACE to start']
+instructions_text = ['Bird jumps when you blink.', 'Press SPACE to start']
 
 screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
 clock = pygame.time.Clock()
@@ -297,6 +316,7 @@ cap = cv2.VideoCapture(0)
 event_facade = EventFacade()
 bird = Bird()
 pipe_manager = Pipe()
+eye_processor = Eye(LEFT_EYE, RIGHT_EYE, EAR_THRESHOLD, EAR_BUFFER_SIZE)
 
 mp_face_mesh = mp.solutions.face_mesh
 face_mesh = mp_face_mesh.FaceMesh(refine_landmarks=True)
@@ -312,7 +332,6 @@ score = 0
 best_score = 0
 frame_counter = 0
 blink_count = 0
-
 
 BIRDFLAP = pygame.USEREVENT + 1
 SPAWNPIPE = pygame.USEREVENT
@@ -350,8 +369,9 @@ while cap.isOpened():
         if results.multi_face_landmarks:
             for face_landmarks in results.multi_face_landmarks:
                 landmarks = [(lm.x, lm.y, lm.z) for lm in face_landmarks.landmark]
-                eye_bool, left_eye_surface, right_eye_surface = eye_calculation(landmarks)
-                if eye_bool:
+                blink_detected = eye_processor.update_ear(landmarks)
+                left_eye_surface, right_eye_surface = eye_processor.process_eyes(frame, landmarks)
+                if blink_detected:
                     frame_counter += 1
                 else:
                     if frame_counter >= CONSECUTIVE_FRAMES:
@@ -359,7 +379,7 @@ while cap.isOpened():
                         bird.movement = FLAP_STRENGTH
                         storage.swoosh.play()
                     frame_counter = 0
-        draw_eyes(left_eye_surface, right_eye_surface)
+        eye_processor.draw_eyes(screen, left_eye_surface, right_eye_surface, EYE_COORD, EYE_ROTATION_ANGLE)
         bird.update_movement(GRAVITY)
         bird.draw()
         pipe_manager.move_pipes()
