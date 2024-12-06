@@ -53,7 +53,7 @@ python main.py
 
 ## 🎥 Photobooth
 Look for examples of usage here later.
-
+![Image 12-6-24 at 10 30 PM 3](https://github.com/user-attachments/assets/04041d0c-4e56-4de6-beb8-569c7dac4b03)
 ---
 
 ## 🤝 Contributing
