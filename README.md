@@ -12,6 +12,7 @@ To ensure smooth gameplay, make sure your setup meets the following requirements
 ### Hardware:
 - **Laptop/PC**: Preferably a **MacOS** device, as this game has been optimized for newer versions of MacOS.  
 - **Webcam**: A built-in or external webcam that can provide good quality video input.
+- **Screen size**: The screen of the laptop or a PC should be 576*1024 (W*H) or more.
   
 ### Software:
 - **MacOS (Recommended)**: A newer version of MacOS is ideal for the best performance and compatibility with dependencies.
