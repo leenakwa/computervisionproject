@@ -1,0 +1,49 @@
+import numpy as np
+
+
+# screen and game process consts
+SCREEN_WIDTH = 576
+SCREEN_HEIGHT = 1024
+GRAVITY = 1
+FPS = 60
+FLAP_STRENGTH = -22
+SMALL_TEXT_COORD = (SCREEN_WIDTH // 2, 300)
+ROTATION_SPEED_MULTIPLIER = 3
+PIPE_HEIGHT = [400, 600, 800]
+PIPE_SPACING = 350
+PIPE_SPEED = 15
+FLOOR_HEIGHT = 100
+FONT_SIZE = 40
+SMALL_FONT_SIZE = 20
+MARGIN = 100
+SCORE_DISPLAY_Y = 50
+BIRD_START_COORD = [100, 512]
+
+# colors
+WHITE = (255, 255, 255)
+RED = (190, 40, 40)
+
+# eye processing
+EAR_THRESHOLD = 0.4
+EAR_BUFFER_SIZE = 5
+EAR_DENOMINATOR = 2.0
+BILATERAL_FILTER_D = 7
+BILATERAL_FILTER_SIGMA_COLOR = 60
+BILATERAL_FILTER_SIGMA_SPACE = 75
+FILTER_KERNEL = np.array([[0, -0.5, 0],
+                          [-0.5, 3, -0.5],
+                          [0, -0.5, 0]])
+EYE_SCALE_FACTOR = 2
+EYE_ROTATION_ANGLE = -90
+CONSECUTIVE_FRAMES = 2
+LEFT_EYE = [33, 160, 158, 133, 153, 144]
+RIGHT_EYE = [362, 385, 387, 263, 373, 380]
+EYE_COORD = [(SCREEN_WIDTH - 150, 50), (50, 50)]
+
+# texts
+instructions_text = ['Bird jumps when you blink.', 'Press SPACE to start']
+
+# game states
+START = 'start'
+GAME = 'game'
+END = 'end'

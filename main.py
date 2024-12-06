@@ -3,133 +3,134 @@ import sys
 
 import cv2
 import mediapipe as mp
-import numpy as np
 import pygame
 
-
-class EventFacade:
-    def __init__(self):
-        self.events = []
-        self.keys_pressed = set()
-
-    def handle_events(self) -> None:
-        self.events = pygame.event.get()
-        self.keys_pressed.clear()
-        for event in self.events:
-            if event.type == pygame.KEYDOWN:
-                self.keys_pressed.add(event.key)
-
-    def is_quit(self) -> bool:
-        return any(event.type == pygame.QUIT for event in self.events)
-
-    def is_key_pressed(self, key) -> bool:
-        return key in self.keys_pressed
-
-    def is_event_type(self, event_type) -> bool:
-        return any(event.type == event_type for event in self.events)
-
-
-class Storage:
-    _instance = None
-
-    def __new__(cls):
-        if cls._instance is None:
-            cls._instance = super(Storage, cls).__new__(cls)
-            cls._instance._initialize_resources()
-        return cls._instance
-
-    def _initialize_resources(self):
-        self.death = pygame.mixer.Sound('assets/sounds/sound_sfx_die.wav')
-        self.swoosh = pygame.mixer.Sound('assets/sounds/sound_sfx_swooshing.wav')
-        self.hit = pygame.mixer.Sound('assets/sounds/sound_sfx_hit.wav')
-        self.font = pygame.font.Font('assets/fonts/04B_19.TTF', FONT_SIZE)
-        self.font20 = pygame.font.Font('assets/fonts/04B_19.TTF', SMALL_FONT_SIZE)
-        self.background = pygame.transform.scale2x(pygame.image.load('assets/images/background-day.png').convert())
-        self.floor = pygame.transform.scale2x(pygame.image.load('assets/images/base.png').convert())
-        self.bird_down_flap = pygame.transform.scale2x(
-            pygame.image.load('assets/images/bluebird-downflap.png').convert_alpha())
-        self.bird_mid_flap = pygame.transform.scale2x(
-            pygame.image.load('assets/images/bluebird-midflap.png').convert_alpha())
-        self.bird_up_flap = pygame.transform.scale2x(
-            pygame.image.load('assets/images/bluebird-upflap.png').convert_alpha())
-        self.pipe = pygame.transform.scale2x(pygame.image.load('assets/images/pipe-green.png').convert_alpha())
+from constants import *
+from event_facade import EventFacade
+from storage import Storage
 
 
 class Pipe:
+    """
+    Manages pipes in the game, including their creation, movement, drawing, collision detection,
+    and scoring logic.
+    """
+
     def __init__(self):
-        self.pipe_img = storage.pipe
-        self.screen = screen
-        self.pipes = list()
-        self.height = PIPE_HEIGHT
+        self.pipe_img = storage.pipe  # Pipe image from storage
+        self.screen = screen  # Game screen
+        self.pipes = list()  # List of pipe dictionaries
+        self.height = PIPE_HEIGHT  # Possible heights for pipes
 
     def create_pipe(self):
+        """
+        Creates a new set of pipes (top and bottom) with random height.
+        """
         pipe_pos = random.choice(self.height)
         new_pipe = self.pipe_img.get_rect(midtop=(round(SCREEN_WIDTH), pipe_pos))
         top_pipe = self.pipe_img.get_rect(midbottom=(round(SCREEN_WIDTH), pipe_pos - PIPE_SPACING))
         self.pipes.append({'bottom': new_pipe, 'top': top_pipe, 'passed': False})
 
     def move_pipes(self):
+        """
+        Moves pipes to the left and removes off-screen pipes.
+        """
         self.pipes = [pipe for pipe in self.pipes if pipe['bottom'].right > 0]
         for pipe in self.pipes:
             pipe['bottom'].centerx -= PIPE_SPEED
             pipe['top'].centerx -= PIPE_SPEED
 
     def check_collision(self, bird_rect):
+        """
+        Checks for collisions between the bird and pipes, or the screen boundaries.
+        Plays death sound and ends the game if a collision occurs.
+        """
         for pipe in self.pipes:
             if bird_rect.colliderect(pipe['bottom']) or bird_rect.colliderect(pipe['top']):
                 storage.death.play()
                 return False
-        if bird_rect.top <= 0 or bird_rect.bottom >= SCREEN_HEIGHT - storage.floor.get_size()[1] // 2:  # Учет пола
+        # Check collision with the top of the screen or the floor
+        if bird_rect.top <= 0 or bird_rect.bottom >= SCREEN_HEIGHT - storage.floor.get_size()[1] // 2:
             storage.death.play()
             return False
         return True
 
     def draw_pipes(self):
+        """
+        Draws all pipes on the screen, including flipped top pipes.
+        """
         for pipe in self.pipes:
             self.screen.blit(self.pipe_img, pipe['bottom'])
             flipped_pipe = pygame.transform.flip(self.pipe_img, False, True)
             self.screen.blit(flipped_pipe, pipe['top'])
 
     def passing_counter(self):
+        """
+        Counts and returns the number of pipes passed by the bird.
+        """
         count = 0
-        for pipe in pipe_manager.pipes:
+        for pipe in self.pipes:
             if not pipe['passed'] and bird.rect.centerx > pipe['bottom'].centerx:
                 pipe['passed'] = True
                 count += 1
         return count
 
     def restart(self):
+        """
+        Resets the pipes for a new game.
+        """
         self.pipes = []
 
 
 class Bird:
+    """
+    Represents the bird character in the game, including its movement, animation,
+    rotation, and reset functionality.
+    """
+
     def __init__(self):
-        self.frames = [storage.bird_up_flap, storage.bird_down_flap, storage.bird_mid_flap]
-        self.index = 0
-        self.image = self.frames[self.index]
-        self.rect = self.image.get_rect(center=(BIRD_START_COORD[0], BIRD_START_COORD[1]))
-        self.movement = 0
-        self.screen = screen
-        self.visible = True
+        self.frames = [storage.bird_up_flap, storage.bird_down_flap, storage.bird_mid_flap]  # Animation frames
+        self.index = 0  # Current animation frame index
+        self.image = self.frames[self.index]  # Current image of the bird
+        self.rect = self.image.get_rect(center=(BIRD_START_COORD[0], BIRD_START_COORD[1]))  # Bird's position
+        self.movement = 0  # Vertical movement speed
+        self.screen = screen  # Game screen
+        self.visible = True  # Visibility status for the bird
 
     def rotate(self):
-        rotated_bird = pygame.transform.rotozoom(self.image, -self.movement * ROTATION_SPEED_MULTIPLIER, 1)
+        """
+        Rotates the bird image based on its movement speed for a realistic falling effect.
+        """
+        rotated_bird = pygame.transform.rotozoom(
+            self.image, -self.movement * ROTATION_SPEED_MULTIPLIER, 1)
         return rotated_bird
 
     def animate(self):
+        """
+        Updates the bird's animation by cycling through its frames.
+        """
         self.index = (self.index + 1) % len(self.frames)
         self.image = self.frames[self.index]
         self.rect = self.image.get_rect(center=(MARGIN, self.rect.centery))
 
     def update_movement(self, gravity):
+        """
+        Updates the bird's vertical movement based on gravity.
+        """
         self.movement += gravity
         self.rect.centery += self.movement
 
     def draw(self):
+        """
+        Draws the bird on the screen with its current rotation.
+        """
         rotated_bird = self.rotate()
         self.screen.blit(rotated_bird, self.rect)
 
     def restart(self):
+        """
+        Resets the bird's position, movement, and animation for a new game.
+        """
         self.rect.center = (MARGIN, SCREEN_HEIGHT // 2)
         self.movement = 0
         self.index = 0
@@ -138,19 +139,42 @@ class Bird:
 
 
 class EARFilter:
+    """
+    A class for filtering and smoothing Eye Aspect Ratio (EAR) values using a sliding buffer.
+    """
+
     def __init__(self, buffer_size):
-        self.buffer = []
-        self.buffer_size = buffer_size
+        """
+        Initializes the EARFilter with a specified buffer size.
+
+        :param buffer_size: The maximum number of EAR values to retain in the buffer.
+        """
+        self.buffer = []  # List to store recent EAR values
+        self.buffer_size = buffer_size  # Maximum size of the buffer
 
     def update(self, ear_value):
+        """
+        Updates the buffer with a new EAR value and calculates the smoothed average.
+
+        :param ear_value: The latest EAR value to add to the buffer.
+        :return: The mean of the values in the buffer.
+        """
         self.buffer.append(ear_value)
-        if len(self.buffer) > self.buffer_size:
-            self.buffer.pop(0)
-        return np.mean(self.buffer)
+        if len(self.buffer) > self.buffer_size:  # Ensure the buffer size does not exceed the limit
+            self.buffer.pop(0)  # Remove the oldest value from the buffer
+        return np.mean(self.buffer)  # Return the smoothed EAR value
 
 
 class Eye:
     def __init__(self, left_eye_indices, right_eye_indices, ear_threshold, ear_buffer_size):
+        """
+        Initialize the Eye class with indices, EAR threshold, and buffer size.
+
+        :param left_eye_indices: Indices of landmarks for the left eye.
+        :param right_eye_indices: Indices of landmarks for the right eye.
+        :param ear_threshold: Threshold to detect blinking.
+        :param ear_buffer_size: Size of the buffer for EAR smoothing.
+        """
         self.left_eye_indices = left_eye_indices
         self.right_eye_indices = right_eye_indices
         self.ear_threshold = ear_threshold
@@ -158,30 +182,30 @@ class Eye:
         self.right_ear_filter = EARFilter(ear_buffer_size)
 
     @staticmethod
-    def calculate_ear(eye_points, landmarks):
+    def calculate_ear(eye_points, landmarks_eye):
         """Calculate Eye Aspect Ratio (EAR)."""
-        d1 = np.linalg.norm(np.array(landmarks[eye_points[1]]) - np.array(landmarks[eye_points[5]]))
-        d2 = np.linalg.norm(np.array(landmarks[eye_points[2]]) - np.array(landmarks[eye_points[4]]))
-        d3 = np.linalg.norm(np.array(landmarks[eye_points[0]]) - np.array(landmarks[eye_points[3]]))
+        d1 = np.linalg.norm(np.array(landmarks_eye[eye_points[1]]) - np.array(landmarks_eye[eye_points[5]]))
+        d2 = np.linalg.norm(np.array(landmarks_eye[eye_points[2]]) - np.array(landmarks_eye[eye_points[4]]))
+        d3 = np.linalg.norm(np.array(landmarks_eye[eye_points[0]]) - np.array(landmarks_eye[eye_points[3]]))
         return (d1 + d2) / (2.0 * d3)
 
-    def update_ear(self, landmarks):
-        """Update EAR values for both eyes and check if blinking."""
-        left_ear = self.left_ear_filter.update(self.calculate_ear(self.left_eye_indices, landmarks))
-        right_ear = self.right_ear_filter.update(self.calculate_ear(self.right_eye_indices, landmarks))
+    def update_ear(self, landmarks_eye):
+        """Update EAR for both eyes and check if blinking."""
+        left_ear = self.left_ear_filter.update(self.calculate_ear(self.left_eye_indices, landmarks_eye))
+        right_ear = self.right_ear_filter.update(self.calculate_ear(self.right_eye_indices, landmarks_eye))
         return left_ear < self.ear_threshold and right_ear < self.ear_threshold
 
     @staticmethod
-    def get_eye_regions(frame, landmarks, eye_indices):
-        """Extract eye region from frame based on landmarks."""
-        coords = np.array([(int(landmarks[idx][0] * frame.shape[1]),
-                            int(landmarks[idx][1] * frame.shape[0])) for idx in eye_indices])
-        x, y, w, h = cv2.boundingRect(coords)
-        return frame[y:y + h, x:x + w]
+    def get_eye_regions(frame_eye, landmarks_eye, eye_indices):
+        """Extract eye regions based on landmarks."""
+        coordinates = np.array([(int(landmarks_eye[idx][0] * frame_eye.shape[1]),
+                                 int(landmarks_eye[idx][1] * frame_eye.shape[0])) for idx in eye_indices])
+        x, y, w, h = cv2.boundingRect(coordinates)
+        return frame_eye[y:y + h, x:x + w]
 
     @staticmethod
     def enhance_eye_image(eye_image):
-        """Enhance eye region image for better visualization."""
+        """Enhance eye region image."""
         if eye_image.size == 0:
             return None
         denoised_eye = cv2.bilateralFilter(eye_image, d=BILATERAL_FILTER_D,
@@ -192,138 +216,117 @@ class Eye:
 
     @staticmethod
     def cv2_to_pygame(cv2_image):
-        """Convert OpenCV image to Pygame surface."""
+        """Convert an OpenCV image to a Pygame surface."""
         if cv2_image is None or cv2_image.size == 0:
             return None
         rgb_image = cv2.cvtColor(cv2_image, cv2.COLOR_BGR2RGB)
         return pygame.surfarray.make_surface(np.flip(rgb_image, axis=1))
 
-    def process_eyes(self, frame, landmarks):
-        """Process eye regions and return EAR state and surfaces."""
-        left_eye = self.get_eye_regions(frame, landmarks, self.left_eye_indices)
-        right_eye = self.get_eye_regions(frame, landmarks, self.right_eye_indices)
+    def process_eyes(self, frame_eye, landmarks_eye):
+        """
+        Process eye regions and return EAR states and Pygame surfaces.
 
-        if left_eye is not None:
-            left_eye = self.enhance_eye_image(left_eye)
-            left_eye_surface = self.cv2_to_pygame(left_eye)
-        else:
-            left_eye_surface = None
+        :param frame_eye: Video frame to process.
+        :param landmarks_eye: Facial landmarks.
+        :return: Processed surfaces for left and right eyes.
+        """
+        left_eye = self.get_eye_regions(frame_eye, landmarks_eye, self.left_eye_indices)
+        right_eye = self.get_eye_regions(frame_eye, landmarks_eye, self.right_eye_indices)
 
-        if right_eye is not None:
-            right_eye = self.enhance_eye_image(right_eye)
-            right_eye_surface = self.cv2_to_pygame(right_eye)
-        else:
-            right_eye_surface = None
+        left_eye_surf = self.cv2_to_pygame(self.enhance_eye_image(left_eye)) if left_eye is not None else None
+        right_eye_surf = self.cv2_to_pygame(self.enhance_eye_image(right_eye)) if right_eye is not None else None
 
-        return left_eye_surface, right_eye_surface
+        return left_eye_surf, right_eye_surf
 
-    def draw_eyes(self, screen, left_eye_surface, right_eye_surface, eye_coords, eye_rotation_angle):
-        """Draw eyes on the screen."""
-        if left_eye_surface:
+    @staticmethod
+    def draw_eyes(py_screen, left_eye_surf, right_eye_surf, eye_coordinates, eye_rotation_angle):
+        """
+        Draw eyes on the screen.
+
+        :param py_screen: Pygame screen to draw on.
+        :param left_eye_surf: Pygame surface of the left eye.
+        :param right_eye_surf: Pygame surface of the right eye.
+        :param eye_coordinates: Coordinates for positioning the eyes.
+        :param eye_rotation_angle: Angle for rotating the eye images.
+        """
+        if left_eye_surf:
             left_eye = pygame.transform.scale2x(
-                pygame.transform.flip(pygame.transform.rotate(left_eye_surface, eye_rotation_angle), True, False))
-            screen.blit(left_eye, eye_coords[0])
+                pygame.transform.flip(pygame.transform.rotate(left_eye_surf, eye_rotation_angle), True, False))
+            py_screen.blit(left_eye, eye_coordinates[0])
 
         if right_eye_surface:
             right_eye = pygame.transform.scale2x(
-                pygame.transform.flip(pygame.transform.rotate(right_eye_surface, eye_rotation_angle), True, False))
-            screen.blit(right_eye, eye_coords[1])
+                pygame.transform.flip(pygame.transform.rotate(right_eye_surf, eye_rotation_angle), True, False))
+            py_screen.blit(right_eye, eye_coordinates[1])
 
 
 def draw_floor():
+    """Draw the floor at the current and next position for seamless scrolling."""
     screen.blit(storage.floor, (floor_x_pos, SCREEN_HEIGHT - storage.floor.get_size()[1] // 2))
     screen.blit(storage.floor, (floor_x_pos + SCREEN_WIDTH, SCREEN_HEIGHT - storage.floor.get_size()[1] // 2))
 
 
-def score_display(game_active):
+def score_display(game_status):
+    """Display the current score and, if inactive, show the best score."""
     score_surface = storage.font.render(f'Score: {int(score)}', True, WHITE)
     score_rect = score_surface.get_rect(center=(SCREEN_WIDTH / 2, 50))
     screen.blit(score_surface, score_rect)
 
-    if game_active is False:
+    if not game_status:
         best_score_surface = storage.font.render(f'Best Score: {int(best_score)}', True, WHITE)
         best_score_rect = best_score_surface.get_rect(center=(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2))
         screen.blit(best_score_surface, best_score_rect)
 
 
-def update_score(score, best):
-    return max(score, best)
+def update_score(current_score, best):
+    """Update the best score if the current score exceeds it."""
+    return max(current_score, best)
 
 
-def display_blink_count(blink_count):
-    blink_surface = storage.font.render(f'Blinks: {blink_count}', True, WHITE)
+def display_blink_count(blink_counter):
+    """Show the number of blinks detected."""
+    blink_surface = storage.font.render(f'Blinks: {blink_counter}', True, WHITE)
     blink_rect = blink_surface.get_rect(center=(SCREEN_WIDTH / 2, MARGIN))
     screen.blit(blink_surface, blink_rect)
 
 
 def write_text(text, font, color, coord):
+    """Render and draw text at the specified coordinates."""
     surface = font.render(text, True, color)
     rect = surface.get_rect(center=coord)
     screen.blit(surface, rect)
 
 
 def manage_floor(x):
-    x -= 1
+    """Scroll the floor and return the updated x position."""
+    x = (x - 1) % -SCREEN_WIDTH
     draw_floor()
-    if x <= -SCREEN_WIDTH:
-        x = 0
     return x
 
 
+# Set up the Pygame
 pygame.init()
-SCREEN_WIDTH, SCREEN_HEIGHT = 576, 1024
-GRAVITY = 1
-FPS = 60
-SMALL_TEXT_COORD = (SCREEN_WIDTH // 2, 300)
-EYE_COORD = [(SCREEN_WIDTH - 150, 50), (50, 50)]
-BIRD_START_COORD = [100, 512]
-ROTATION_SPEED_MULTIPLIER = 3
-FLOOR_HEIGHT = 100
-MARGIN = 100
-SCORE_DISPLAY_Y = 50
-PIPE_HEIGHT = [400, 600, 800]
-PIPE_SPACING = 350
-PIPE_SPEED = 15
-FONT_SIZE = 40
-SMALL_FONT_SIZE = 20
-WHITE = (255, 255, 255)
-RED = (190, 40, 40)
-FLAP_STRENGTH = -22
-EAR_THRESHOLD = 0.4
-EAR_BUFFER_SIZE = 5
-EAR_DENOMINATOR = 2.0
-BILATERAL_FILTER_D = 7
-BILATERAL_FILTER_SIGMA_COLOR = 60
-BILATERAL_FILTER_SIGMA_SPACE = 75
-FILTER_KERNEL = np.array([[0, -0.5, 0],
-                          [-0.5, 3, -0.5],
-                          [0, -0.5, 0]])
-EYE_SCALE_FACTOR = 2
-EYE_ROTATION_ANGLE = -90
-CONSECUTIVE_FRAMES = 2
-LEFT_EYE = [33, 160, 158, 133, 153, 144]
-RIGHT_EYE = [362, 385, 387, 263, 373, 380]
-START = 'start'
-GAME = 'game'
-END = 'end'
-
-instructions_text = ['Bird jumps when you blink.', 'Press SPACE to start']
-
 screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
 clock = pygame.time.Clock()
+
+# Initialize class objects
 storage = Storage()
-cap = cv2.VideoCapture(0)
 event_facade = EventFacade()
 bird = Bird()
 pipe_manager = Pipe()
 eye_processor = Eye(LEFT_EYE, RIGHT_EYE, EAR_THRESHOLD, EAR_BUFFER_SIZE)
-
-mp_face_mesh = mp.solutions.face_mesh
-face_mesh = mp_face_mesh.FaceMesh(refine_landmarks=True)
-mp_drawing = mp.solutions.drawing_utils
 left_ear_filter = EARFilter(EAR_BUFFER_SIZE)
 right_ear_filter = EARFilter(EAR_BUFFER_SIZE)
 
+# Initialize OpenCV video capture for accessing camera
+cap = cv2.VideoCapture(0)
+
+# Set up MediaPipe FaceMesh for facial landmark detection
+mp_face_mesh = mp.solutions.face_mesh
+face_mesh = mp_face_mesh.FaceMesh(refine_landmarks=True)
+mp_drawing = mp.solutions.drawing_utils
+
+# Initialize game state variables
 game_state = START
 game_active = True
 bird_movement = 0
@@ -333,10 +336,13 @@ best_score = 0
 frame_counter = 0
 blink_count = 0
 
-BIRDFLAP = pygame.USEREVENT + 1
-SPAWNPIPE = pygame.USEREVENT
-pygame.time.set_timer(BIRDFLAP, 100)
-pygame.time.set_timer(SPAWNPIPE, 1600)
+# Set up user events for bird flapping and spawning pipes
+BIRD_FLAP = pygame.USEREVENT + 1  # Custom event for bird flapping
+SPAWN_PIPE = pygame.USEREVENT  # Custom event for spawning pipes
+
+# Set the timer for the bird flapping event (every 100ms) and spawning pipes (every 1600ms)
+pygame.time.set_timer(BIRD_FLAP, 100)
+pygame.time.set_timer(SPAWN_PIPE, 1600)
 
 while cap.isOpened():
     success, frame = cap.read()
@@ -353,9 +359,9 @@ while cap.isOpened():
             pipe_manager.pipes = []
             bird.restart()
             score = 0
-    if event_facade.is_event_type(SPAWNPIPE):
+    if event_facade.is_event_type(SPAWN_PIPE):
         pipe_manager.create_pipe()
-    if event_facade.is_event_type(BIRDFLAP):
+    if event_facade.is_event_type(BIRD_FLAP):
         bird.animate()
 
     screen.blit(storage.background, (0, 0))
